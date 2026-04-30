@@ -217,11 +217,7 @@ def write_labels_jsonl(
         y             — label, always 1 for this file (int)
         label_source  — "phishtank" (str)
         label_ts      — UTC ISO-8601 timestamp of when this file was written (str)
- 
-    In your notebook, join on domain:
-        labels = pd.read_json("phishtank_labels.jsonl", lines=True)
-        df = df.merge(labels[["domain","y","label_source"]], on="domain", how="left")
-        df["y"] = df["y"].fillna(0).astype(int)   # 0 = not in PhishTank
+
     """
     label_ts = datetime.now(timezone.utc).isoformat()
  
@@ -248,7 +244,6 @@ def write_labels_jsonl(
     log.info("Wrote %d phishing labels to %s", written, output_file)
 
 
-# ── EDA usage example ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -258,7 +253,7 @@ if __name__ == "__main__":
     labeler.refresh()
     print(labeler.stats)
 
-    # Write labels to their own JSONL — join with cert data in the notebook
+    # 2. Write labels to their own JSONL — join with cert data in the notebook
     write_labels_jsonl(labeler, output_file="phishtank_labels.jsonl")
 
 
