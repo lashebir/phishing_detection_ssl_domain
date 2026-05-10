@@ -672,11 +672,13 @@ def normalize_crtsh_record(raw: dict, phishing_domain: str, label_ts: str) -> di
         def parse_ts(s):
             if not s:
                 return None
-            try:
-                return datetime.strptime(s, "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=timezone.utc).timestamp()
-            except ValueError:
-                return None
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+                try:
+                    return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc).timestamp()
+                except ValueError:
+                    continue
+            log.debug("Could not parse timestamp: %s", s)
+            return None
 
         # Parse issuer DN
         issuer_str = raw.get("issuer_name", "") or ""
@@ -748,11 +750,16 @@ def run_windows(args):
     log.info("CT log tree size: %d", tree_size)
 
     stats = {"anchors_processed": 0, "certs_written": 0}
+    seen_indices: set[int] = set()
 
     with open(args.output, "a", buffering=1) as out:
         for _, row in df_anchors.iterrows():
             anchor_ts = row["not_before"]
-            anchor_domain = row["domains"][0] if isinstance(row["domains"], list) else row["domains"]
+            anchor_domain = (
+                row["domains"][0] 
+                if isinstance(row["domains"], list) and len(row["domains"]) > 0 
+                else str(row["domains"])
+            )
 
             log.info("Finding CT index for %s (ts=%s) …",
                      anchor_domain,
@@ -763,8 +770,9 @@ def run_windows(args):
 
             written = fetch_ct_window(
                 anchor_index, anchor_domain, anchor_ts,
-                tree_size, CT_LOG_URL, args.window_size, out
+                tree_size, CT_LOG_URL, args.window_size, out, seen_indices
             )
+
             stats["certs_written"] += written
             stats["anchors_processed"] += 1
 
@@ -809,46 +817,52 @@ def timestamp_to_ct_index(target_ts: float, tree_size: int, ct_log_url: str) -> 
 
 
 def fetch_ct_window(anchor_index, anchor_domain, anchor_ts, tree_size,
-                    ct_log_url, window_size, out_file) -> int:
-    """Fetch certificates before and after anchor index."""
+                    ct_log_url, window_size, out_file, seen_indices: set) -> int:
     start = max(0, anchor_index - window_size)
     end = min(tree_size - 1, anchor_index + window_size)
     written = 0
+    BATCH = 256  # safe batch size
 
-    try:
-        resp = requests.get(
-            f"{ct_log_url}/get-entries",
-            params={"start": start, "end": end},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        entries = resp.json().get("entries", [])
-    except requests.RequestException as exc:
-        log.warning("Failed to fetch window at %d: %s", anchor_index, exc)
-        return 0
+    current = start
+    while current <= end:
+        batch_end = min(current + BATCH - 1, end)
+        try:
+            resp = requests.get(
+                f"{ct_log_url}/get-entries",
+                params={"start": current, "end": batch_end},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            entries = resp.json().get("entries", [])
+        except requests.RequestException as exc:
+            log.warning("Failed to fetch window batch at %d: %s", current, exc)
+            break
 
-    for i, entry in enumerate(entries):
-        abs_index = start + i
-        record = parse_ct_entry(entry, abs_index)
-        if not record:
-            continue
+        for i, entry in enumerate(entries):
+            abs_index = current + i
+            record = parse_ct_entry(entry, abs_index)
+            if not record:
+                continue
 
-        if abs_index < anchor_index:
-            position = "before"
-        elif abs_index == anchor_index:
-            position = "anchor"
-        else:
-            position = "after"
+            position = "before" if abs_index < anchor_index else \
+                       "anchor" if abs_index == anchor_index else "after"
 
-        record.update({
-            "data_source": "ct_historical_window",
-            "anchor_domain": anchor_domain,
-            "anchor_ts": anchor_ts,
-            "anchor_index": anchor_index,
-            "window_position": position,
-        })
-        out_file.write(json.dumps(record, default=str) + "\n")
-        written += 1
+            record.update({
+                "data_source":     "ct_historical_window",
+                "anchor_domain":   anchor_domain,
+                "anchor_ts":       anchor_ts,
+                "anchor_index":    anchor_index,
+                "window_position": position,
+            })
+
+            if abs_index in seen_indices:
+                continue
+            seen_indices.add(abs_index)
+            out_file.write(json.dumps(record, default=str) + "\n")
+            written += 1
+
+        current += len(entries)
+        time.sleep(0.5)
 
     return written
 
@@ -872,9 +886,9 @@ def create_parser():
         "live",
         help="Integrated pipeline: collect certs + refresh labels"
     )
-    live_pipeline.add_argument("--certs", default="data/raw/certs_fallback.jsonl",
+    live_pipeline.add_argument("--certs", default="sources/raw/certs_fallback.jsonl",
                                help="Certs output JSONL (default: certs_fallback.jsonl)")
-    live_pipeline.add_argument("--labels", default="data/raw/phishtank_labels.jsonl",
+    live_pipeline.add_argument("--labels", default="sources/raw/phishtank_labels.jsonl",
                                help="Labels output JSONL (default: phishtank_labels.jsonl)")
     live_pipeline.add_argument("--duration", type=int, default=900,
                                help="Seconds per cert collection batch (default: 900 or 15 minutes)")
@@ -896,7 +910,7 @@ def create_parser():
 
     # ── live-certs ────────────────────────────────────────────────────────────
     live = subparsers.add_parser("live-certs", help="Poll CT log for live certificates")
-    live.add_argument("-o", "--output", default="data/raw/certs_fallback.jsonl",
+    live.add_argument("-o", "--output", default="sources/raw/certs_fallback.jsonl",
                       help="Output JSONL file (default: certs_fallback.jsonl)")
     live.add_argument("--ct-log-url", default="https://ct.googleapis.com/logs/us1/argon2026h1/ct/v1",
                       help="CT log API URL")
@@ -916,8 +930,8 @@ def create_parser():
     )
     labels.add_argument("-c", "--certs", required=True,
                         help="Cert JSONL file to extract domains from (required)")
-    labels.add_argument("-o", "--output", default="data/raw/phishtank_labels.jsonl",
-                        help="Output JSONL file (default: data/raw/phishtank_labels.jsonl)")
+    labels.add_argument("-o", "--output", default="sources/raw/phishtank_labels.jsonl",
+                        help="Output JSONL file (default: sources/raw/phishtank_labels.jsonl)")
     labels.add_argument("--api-key",
                         help="PhishTank API key (or set PHISHTANK_API_KEY env var)")
     labels.add_argument("--phishtank-cache", default="phishtank_cache.csv",
@@ -930,8 +944,8 @@ def create_parser():
         "historical-phishing-labels",
         help="Import all PhishTank phishing domains as labels"
     )
-    phishing_labels.add_argument("-o", "--output", default="data/raw/phishing_labels.jsonl",
-                                 help="Output JSONL file (default: data/raw/phishing_labels.jsonl)")
+    phishing_labels.add_argument("-o", "--output", default="sources/raw/phishing_labels.jsonl",
+                                 help="Output JSONL file (default: sources/raw/phishing_labels.jsonl)")
     phishing_labels.add_argument("--api-key",
                                  help="PhishTank API key (or set PHISHTANK_API_KEY env var)")
     phishing_labels.add_argument("--phishtank-cache", default="phishtank_cache.csv",
@@ -943,7 +957,7 @@ def create_parser():
     hist = subparsers.add_parser("historical-phishing-certs", help="Fetch historical certs for phishing domains via crt.sh")
     hist.add_argument("-l", "--labels", required=True,
                       help="PhishTank labels JSONL file (required)")
-    hist.add_argument("-o", "--output", default="data/raw/certs_phishtank_historical.jsonl",
+    hist.add_argument("-o", "--output", default="sources/raw/certs_phishtank_historical.jsonl",
                       help="Output JSONL file (default: certs_phishtank_historical.jsonl)")
     hist.add_argument("--max-domains", type=int,
                       help="Limit to first N domains (default: all)")
@@ -956,7 +970,7 @@ def create_parser():
     windows = subparsers.add_parser("windows", help="Fetch CT windows around phishing certs")
     windows.add_argument("-p", "--phishing", required=True,
                          help="Phishing certs JSONL file (required)")
-    windows.add_argument("-o", "--output", default="data/raw/certs_ct_historical_windows.jsonl",
+    windows.add_argument("-o", "--output", default="sources/raw/certs_ct_historical_windows.jsonl",
                          help="Output JSONL file (default: certs_ct_historical_windows.jsonl)")
     windows.add_argument("--ct-log-url", default="https://ct.googleapis.com/logs/us1/argon2026h1/ct/v1",
                          help="CT log API URL")
