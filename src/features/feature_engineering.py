@@ -568,6 +568,12 @@ class FeatureEngineer:
 
         df_out = df.copy()
 
+        # Extract certificate features BEFORE exploding (needs access to full domains list)
+        if verbose:
+            print("  - Extracting certificate features...")
+        cert_features = df_out.apply(self.extract_cert_features, axis=1, result_type="expand")
+        df_out = pd.concat([df_out, cert_features], axis=1)
+
         # Explode domains if requested
         if explode_domains:
             if verbose:
@@ -584,12 +590,6 @@ class FeatureEngineer:
                 .str.lstrip("*.")
             )
             df_out = df_out[df_out["domain"].str.len() > 0]
-
-        # Extract certificate features
-        if verbose:
-            print("  - Extracting certificate features...")
-        cert_features = df_out.apply(self.extract_cert_features, axis=1, result_type="expand")
-        df_out = pd.concat([df_out, cert_features], axis=1)
 
         # Extract domain features
         if verbose:

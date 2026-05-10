@@ -750,11 +750,16 @@ def run_windows(args):
     log.info("CT log tree size: %d", tree_size)
 
     stats = {"anchors_processed": 0, "certs_written": 0}
+    seen_indices: set[int] = set()
 
     with open(args.output, "a", buffering=1) as out:
         for _, row in df_anchors.iterrows():
             anchor_ts = row["not_before"]
-            anchor_domain = row["domains"][0] if isinstance(row["domains"], list) else row["domains"]
+            anchor_domain = (
+                row["domains"][0] 
+                if isinstance(row["domains"], list) and len(row["domains"]) > 0 
+                else str(row["domains"])
+            )
 
             log.info("Finding CT index for %s (ts=%s) …",
                      anchor_domain,
@@ -765,8 +770,9 @@ def run_windows(args):
 
             written = fetch_ct_window(
                 anchor_index, anchor_domain, anchor_ts,
-                tree_size, CT_LOG_URL, args.window_size, out
+                tree_size, CT_LOG_URL, args.window_size, out, seen_indices
             )
+
             stats["certs_written"] += written
             stats["anchors_processed"] += 1
 
@@ -811,46 +817,52 @@ def timestamp_to_ct_index(target_ts: float, tree_size: int, ct_log_url: str) -> 
 
 
 def fetch_ct_window(anchor_index, anchor_domain, anchor_ts, tree_size,
-                    ct_log_url, window_size, out_file) -> int:
-    """Fetch certificates before and after anchor index."""
+                    ct_log_url, window_size, out_file, seen_indices: set) -> int:
     start = max(0, anchor_index - window_size)
     end = min(tree_size - 1, anchor_index + window_size)
     written = 0
+    BATCH = 256  # safe batch size
 
-    try:
-        resp = requests.get(
-            f"{ct_log_url}/get-entries",
-            params={"start": start, "end": end},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        entries = resp.json().get("entries", [])
-    except requests.RequestException as exc:
-        log.warning("Failed to fetch window at %d: %s", anchor_index, exc)
-        return 0
+    current = start
+    while current <= end:
+        batch_end = min(current + BATCH - 1, end)
+        try:
+            resp = requests.get(
+                f"{ct_log_url}/get-entries",
+                params={"start": current, "end": batch_end},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            entries = resp.json().get("entries", [])
+        except requests.RequestException as exc:
+            log.warning("Failed to fetch window batch at %d: %s", current, exc)
+            break
 
-    for i, entry in enumerate(entries):
-        abs_index = start + i
-        record = parse_ct_entry(entry, abs_index)
-        if not record:
-            continue
+        for i, entry in enumerate(entries):
+            abs_index = current + i
+            record = parse_ct_entry(entry, abs_index)
+            if not record:
+                continue
 
-        if abs_index < anchor_index:
-            position = "before"
-        elif abs_index == anchor_index:
-            position = "anchor"
-        else:
-            position = "after"
+            position = "before" if abs_index < anchor_index else \
+                       "anchor" if abs_index == anchor_index else "after"
 
-        record.update({
-            "data_source": "ct_historical_window",
-            "anchor_domain": anchor_domain,
-            "anchor_ts": anchor_ts,
-            "anchor_index": anchor_index,
-            "window_position": position,
-        })
-        out_file.write(json.dumps(record, default=str) + "\n")
-        written += 1
+            record.update({
+                "data_source":     "ct_historical_window",
+                "anchor_domain":   anchor_domain,
+                "anchor_ts":       anchor_ts,
+                "anchor_index":    anchor_index,
+                "window_position": position,
+            })
+
+            if abs_index in seen_indices:
+                continue
+            seen_indices.add(abs_index)
+            out_file.write(json.dumps(record, default=str) + "\n")
+            written += 1
+
+        current += len(entries)
+        time.sleep(0.5)
 
     return written
 
