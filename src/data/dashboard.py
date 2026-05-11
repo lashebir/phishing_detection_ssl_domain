@@ -88,11 +88,16 @@ WARN_COLOR     = "#ffaa00"
 DEFAULT_CERTS_FILE    = "certs_fallback.jsonl"
 DEFAULT_LABELS_FILE   = "phishtank_labels.jsonl"
 DEFAULT_FEATURES_FILE = "features.parquet"
-DEFAULT_MODEL_FILE    = "xgb_model.pkl"
+DEFAULT_MODEL_FILE    = "src/models/xgb_model_0510.pkl"  # Tuned model from notebook (entropy + tld_risk)
 DEFAULT_STATE_FILE    = "poller_state.json"
 
-FEATURE_COLS = ["entropy", "tld_risk", "domain_length", "subdomain_count",
-                "brand_distance", "validity_days", "san_count"]
+FEATURE_COLS = [
+    "domain_length", "entropy", "subdomain_count", "hyphen_count",
+    "digit_count", "digit_ratio", "vowel_consonant_ratio", "consecutive_consonants",
+    "has_at_symbol", "has_ip_address", "tld_risk", "brand_distance",
+    "is_brand_lookalike", "keyword_count", "has_keyword", "cert_age_days",
+    "is_wildcard", "san_count", "is_self_signed", "has_subject_org"
+]
 
 # ── Feature engineering (mirrors feature_engineering.py) ─────────────────────
 
@@ -243,10 +248,63 @@ with st.sidebar:
         icon = "🟢" if Path(path).exists() else "🔴"
         st.markdown(f"{icon} `{label}`")
 
+        # Show last modified time for streaming data
+        if Path(path).exists() and label in ["Features", "Certs", "Labels"]:
+            from datetime import datetime
+            mtime = Path(path).stat().st_mtime
+            last_update = datetime.fromtimestamp(mtime)
+            time_ago = datetime.now() - last_update
+
+            if time_ago.total_seconds() < 300:  # Less than 5 minutes
+                freshness = "🟢 Live"
+            elif time_ago.total_seconds() < 3600:  # Less than 1 hour
+                freshness = f"🟡 {int(time_ago.total_seconds() / 60)}m ago"
+            else:
+                freshness = f"⚪ {int(time_ago.total_seconds() / 3600)}h ago"
+
+            st.markdown(f"<small>{freshness}</small>", unsafe_allow_html=True)
+
     st.markdown("---")
-    if st.button("🔄 Refresh Data"):
-        st.cache_data.clear()
+
+    # Data refresh controls
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    with col2:
+        auto_refresh = st.checkbox("Auto", value=False, help="Auto-refresh every 5 minutes")
+
+    if auto_refresh:
+        import time
+        time.sleep(300)
         st.rerun()
+
+    st.markdown("---")
+
+    # Streaming status
+    with st.expander("📡 Streaming Pipeline", expanded=False):
+        st.markdown("""
+        **Continuous Data Collection:**
+
+        ```bash
+        # Start 48-hour streaming in background
+        nohup ./scripts/stream_48_hours_bg.sh > stream.log 2>&1 &
+
+        # Monitor progress
+        tail -f stream.log
+
+        # Update dashboard data (run periodically)
+        ./scripts/pipeline_streaming.sh --skip-training
+        ```
+
+        **Auto-refresh:** Enable the "Auto" checkbox to refresh data every 5 minutes.
+
+        **Data freshness indicators:**
+        - 🟢 Live (< 5 min old)
+        - 🟡 Recent (< 1 hour old)
+        - ⚪ Stale (> 1 hour old)
+        """)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
