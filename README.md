@@ -2,7 +2,7 @@
 
 Real-time phishing detection using Certificate Transparency (CT) logs and machine learning. This system monitors newly issued SSL/TLS certificates to identify potential phishing domains before they can be used in attacks.
 
-## 🎯 Project Goal
+## Project Goal
 
 Detect phishing websites by analyzing patterns in SSL/TLS certificates as they're issued, leveraging:
 - **Certificate Transparency logs** for real-time certificate issuance data
@@ -13,8 +13,13 @@ Detect phishing websites by analyzing patterns in SSL/TLS certificates as they'r
 **Key Innovation**: Time-series aware phishing detection that maintains temporal integrity by separating historical training data from live streaming data.
 
 ---
+## Personal Note
 
-## 📊 Data Sources
+Before diving into the technical aspects, I wanted to discuss my experience a bit. This has been a deeply insightful project. It has illustrated how time sensitive data must be controlled and studied properly for an accurate analysis, especially when it gives us overly optimistic results. In machine learning, some of the strongest insights come when we question the data and challenge initial assumptions, especially when working with complicated datasets. This project also gave me stronger insight into key cybersecurity features and trends-- I am a big fan of learning about new domains in action, going beyond research materials and studying actual trends through EDA & machine learning! Please feel free to send any questions to ltashebir77@gmail.com or on my [LinkedIn](https://www.linkedin.com/in/leah-ashebir/).
+
+---
+
+## Data Sources
 
 ### Primary Data Streams
 
@@ -45,7 +50,7 @@ Detect phishing websites by analyzing patterns in SSL/TLS certificates as they'r
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### Current Stack (Production-Ready)
 
@@ -144,7 +149,7 @@ See `requirements.txt` for complete list. Key dependencies:
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Prerequisites
 
@@ -213,7 +218,7 @@ dbt --version
 
 ---
 
-## 📖 Quick Start
+<!-- ## Quick Start
 
 ### Option 1: 48-Hour Streaming Collection (Recommended)
 
@@ -285,15 +290,15 @@ con.close()
 # 4. Train model
 python scripts/train_xgboost.py \
     --input features.parquet \
-    --output src/models/xgb_model.pkl
+    --output src/models/xgb_model.pkl -->
 
-# 5. Launch dashboard
+<!-- # 5. Launch dashboard
 streamlit run src/data/dashboard_streaming.py
-```
+``` -->
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ssl_anomaly_detection/
@@ -315,23 +320,6 @@ ssl_anomaly_detection/
 │   ├── train_xgboost.py                # Model training script
 │   └── load_data_to_duckdb.py          # DuckDB data loader
 │
-├── models/                      # dbt models (SQL transformations)
-│   ├── staging/                 # Raw data normalization
-│   ├── intermediate/            # Feature engineering steps
-│   └── final/                   # Final feature tables
-│
-├── data/
-│   └── timeseries/              # Historical backfill output
-│       └── certs_historical.jsonl
-│
-├── sources/raw/                 # Streaming data (gitignored)
-│   ├── certs_streaming_48h.jsonl
-│   ├── labels_streaming_48h.jsonl
-│   └── stream_sessions.log
-│
-├── docs/
-│   └── BACKFILL_AND_GAP_FILLING.md  # Gap handling guide
-│
 ├── requirements.txt             # Python dependencies
 ├── dbt_project.yml             # dbt configuration
 ├── profiles.yml                # DuckDB connection config
@@ -340,7 +328,7 @@ ssl_anomaly_detection/
 
 ---
 
-## 🔑 Key Features
+## Key Features
 
 ### 1. Temporal Integrity
 - **Separate data streams**: Historical training data never mixes with live streaming
@@ -374,17 +362,15 @@ ssl_anomaly_detection/
 
 ---
 
-## 📚 Documentation
+<!-- ## Documentation -->
 
-- **[Backfill & Gap Filling Guide](docs/BACKFILL_AND_GAP_FILLING.md)** - Complete guide for gap detection and recovery
-- **[CLAUDE.md](CLAUDE.md)** - Project architecture and design decisions (for Claude Code)
-- **Inline Documentation** - All scripts include detailed docstrings and usage examples
+<!-- - **Inline Documentation** - All scripts include detailed docstrings and usage examples -->
 
----
+<!-- --- -->
 
 ## 🔧 Common Commands
 
-### Data Collection
+<!-- ### Data Collection
 
 ```bash
 # Streaming collection (48 hours)
@@ -440,7 +426,7 @@ python scripts/train_xgboost.py \
 python scripts/add_predictions_to_features.py \
     --features features.parquet \
     --model src/models/xgb_model.pkl
-```
+``` -->
 
 ### Dashboard
 
@@ -587,7 +573,7 @@ export MODEL_DIR="src/models"
 
 ---
 
-## 🤝 Contributing
+## Contributions
 
 Contributions welcome! Areas of interest:
 - Additional CT log sources (Cloudflare, Let's Encrypt)
@@ -598,26 +584,8 @@ Contributions welcome! Areas of interest:
 
 ---
 
-## 📄 License
-
-[Add your license here]
-
----
-
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Google Certificate Transparency** - CT log infrastructure
 - **PhishTank** - Community-verified phishing labels
 - **Tranco** - Research-oriented ranking list
-- **dbt Labs** - SQL-based transformation framework
-- **DuckDB** - In-process analytical database
-
----
-
-## 📧 Contact
-
-[Add contact information or issue tracker link]
-
----
-
-**Built with ❤️ for safer internet browsing**
