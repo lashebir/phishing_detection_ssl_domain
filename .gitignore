@@ -1,6 +1,5 @@
-# Documentation (user-specific)
+# Documentation (user-specific, keep CLAUDE.md for AI context)
 CLAUDE.md
-docs/
 
 # Data files (large, generated)
 sources/
