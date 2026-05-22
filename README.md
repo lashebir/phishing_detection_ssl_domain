@@ -15,7 +15,9 @@ Detect phishing websites by analyzing patterns in SSL/TLS certificates as they'r
 ---
 ## Personal Note
 
-Before diving into the technical aspects, I wanted to discuss my experience a bit. This has been a deeply insightful project. It has illustrated how time sensitive data must be controlled and studied properly for an accurate analysis, especially when it gives us overly optimistic results. In machine learning, some of the strongest insights come when we question the data and challenge initial assumptions, especially when working with complicated datasets. This project also gave me stronger insight into key cybersecurity features and trends-- I am a big fan of learning about new domains in action, going beyond research materials and studying actual trends through EDA & machine learning! Please feel free to send any questions to ltashebir77@gmail.com or on my [LinkedIn](https://www.linkedin.com/in/leah-ashebir/).
+Before diving into the technical aspects, I wanted to discuss my experience a bit. This has been a deeply insightful project. It has illustrated how time sensitive data must be controlled and studied properly for an accurate analysis, especially when it gives us overly optimistic results. In machine learning, some of the strongest insights come when we question the data and challenge initial assumptions, especially when working with complicated datasets. This project also gave me stronger insight into key cybersecurity features and trends-- I am a big fan of learning about new domains in action, going beyond research materials and studying actual trends through EDA & machine learning! Cybersecurity is an especially pertinent issue today, especially with advancemetns borne of AI, and new studies are needed to keep up with and even anticipate threats.
+
+Please feel free to send any questions to ltashebir77@gmail.com or on my [LinkedIn](https://www.linkedin.com/in/leah-ashebir/).
 
 ---
 
@@ -521,41 +523,30 @@ curl -s https://ct.googleapis.com/logs/us1/argon2026h1/ct/v1/get-sth | jq .tree_
 
 ---
 
-## 🚧 Roadmap
+## Roadmap
 
-### Phase 1: Core Pipeline (Complete ✅)
-- [x] CT log streaming ingestion
+### Phase 1: Core Pipeline (Complete)
+- [x] Iniital CT log streaming ingestion & analysis
 - [x] PhishTank + Tranco label integration
-- [x] dbt-based feature engineering
 - [x] XGBoost model training
 - [x] Streamlit dashboard
-- [x] Gap detection and backfill
 
-### Phase 2: Production Hardening (In Progress)
-- [x] Session logging for gap analysis
-- [x] Automated backfill scripts
+### Phase 2: Advanced Analytics (In Progress)
 - [x] Time series gap filling
-- [ ] Comprehensive test suite
-- [ ] CI/CD pipeline
-- [ ] Docker containerization
-
-### Phase 3: Real-Time Streaming (Planned)
-- [ ] Kafka integration for event streaming
-- [ ] Online feature store (Redis)
-- [ ] Real-time model inference
-- [ ] Alert system (email/Slack/webhook)
-- [ ] Incremental model updates
-
-### Phase 4: Advanced Analytics (Future)
-- [ ] Temporal pattern analysis (prophet/statsmodels)
 - [ ] Network-based features (ASN, IP reputation)
-- [ ] Ensemble models (XGBoost + LightGBM + Neural Net)
-- [ ] Explainability (SHAP values)
-- [ ] A/B testing framework
+- [ ] Temporal pattern analysis (Prophet/statsmodels)
+- [ ] Explainability & Interpretation
+
+### Phase 4: Real-Time Streaming (In Progress)
+- [ ] dbt-based feature engineering
+- [ ] Kafka integration for event streaming
+- [ ] Docker containerization
+- [ ] Real-time model inference
+- [ ] Incremental model updates
 
 ---
 
-## 📝 Environment Variables
+## Environment Variables
 
 Optional configuration via environment variables:
 
@@ -576,7 +567,6 @@ export MODEL_DIR="src/models"
 ## Contributions
 
 Contributions welcome! Areas of interest:
-- Additional CT log sources (Cloudflare, Let's Encrypt)
 - New features (WHOIS data, DNS records, page content)
 - Model improvements (deep learning, ensemble methods)
 - Dashboard enhancements (real-time updates, alerting)
