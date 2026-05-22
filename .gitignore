@@ -1,9 +1,6 @@
 # Documentation (user-specific)
 CLAUDE.md
-DASHBOARD_SETUP.md
-STREAMING_INTEGRATION.md
-DASHBOARD_USAGE.md
-SETUP_COMPLETE.md
+docs/
 
 # Data files (large, generated)
 sources/
@@ -14,6 +11,7 @@ feature_store.duckdb
 *.duckdb
 *.duckdb.wal
 seeds/
+data/
 
 # Cache files
 phishtank_cache.csv

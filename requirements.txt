@@ -8,6 +8,8 @@ python-Levenshtein
 tldextract
 seaborn
 pyarrow
+statsmodels
+prophet
 
 # Core ML
 xgboost>=2.0.0

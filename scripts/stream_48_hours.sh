@@ -19,6 +19,18 @@ TOTAL_HOURS=$((DURATION * ITERATIONS / 3600))
 
 CERTS_FILE="sources/raw/certs_streaming_48h.jsonl"
 LABELS_FILE="sources/raw/labels_streaming_48h.jsonl"
+SESSION_LOG="sources/raw/stream_sessions.log"
+
+# ── Session logging ───────────────────────────────────────────────────────────
+# Log session start/stop to track intentional vs. unintentional gaps
+
+trap 'echo "STOP,$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "${SESSION_LOG}"' EXIT
+
+# Create session log directory if needed
+mkdir -p "$(dirname "${SESSION_LOG}")"
+
+# Log session start
+echo "START,$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "${SESSION_LOG}"
 
 # Clean up any existing files to start fresh
 if [ -f "${CERTS_FILE}" ] || [ -f "${LABELS_FILE}" ]; then

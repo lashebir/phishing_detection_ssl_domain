@@ -271,7 +271,15 @@ def run_live_certs(args):
     log.info("CT log tree size: %d", tree_size)
 
     start = args.start_index if args.start_index is not None else tree_size - BATCH_SIZE
-    log.info("Starting poll from index %d (batch=%d)", start, BATCH_SIZE)
+
+    # Backfill mode: bounded run with explicit end index
+    backfill_mode = hasattr(args, 'end_index') and args.end_index is not None
+    if backfill_mode:
+        end_index = min(args.end_index, tree_size - 1)
+        log.info("BACKFILL MODE: Collecting entries %d → %d (%d total)",
+                 start, end_index, end_index - start + 1)
+    else:
+        log.info("Starting poll from index %d (batch=%d)", start, BATCH_SIZE)
 
     _output_file = open(args.output, "a", buffering=1)
     log.info("Writing to %s", args.output)
@@ -279,24 +287,39 @@ def run_live_certs(args):
     start_time = time.time()
 
     while _running:
-        # Stop if duration limit reached
-        if args.duration and (time.time() - start_time) >= args.duration:
+        # Stop if duration limit reached (only in streaming mode)
+        if not backfill_mode and args.duration and (time.time() - start_time) >= args.duration:
             log.info("Duration limit reached (%ds)", args.duration)
             break
 
+        # Stop if end_index reached (backfill mode)
+        if backfill_mode and start > end_index:
+            log.info("Backfill complete — reached end index %d", end_index)
+            break
+
         try:
-            end = start + BATCH_SIZE - 1
+            # Calculate batch end (respect end_index in backfill mode)
+            if backfill_mode:
+                batch_end = min(start + BATCH_SIZE - 1, end_index)
+            else:
+                batch_end = start + BATCH_SIZE - 1
+
             resp = requests.get(
                 f"{CT_LOG_URL}/get-entries",
-                params={"start": start, "end": end},
+                params={"start": start, "end": batch_end},
                 timeout=30,
             )
             resp.raise_for_status()
             entries = resp.json().get("entries", [])
 
             if not entries:
-                log.info("No new entries at index %d, waiting …", start)
-                time.sleep(5)
+                if backfill_mode:
+                    log.warning("No entries returned for range %d-%d", start, batch_end)
+                    # Move forward in backfill mode even if batch is empty
+                    start = batch_end + 1
+                else:
+                    log.info("No new entries at index %d, waiting …", start)
+                    time.sleep(5)
                 continue
 
             for i, entry in enumerate(entries):
@@ -314,7 +337,11 @@ def run_live_certs(args):
             if stats["fetched"] % 2_000 == 0:
                 print_stats()
 
-            time.sleep(POLL_DELAY)
+            # Minimal delay in backfill mode for faster collection
+            if backfill_mode:
+                time.sleep(0.1)
+            else:
+                time.sleep(POLL_DELAY)
 
         except requests.RequestException as exc:
             log.warning("API error: %s — retrying in 10s", exc)
@@ -323,7 +350,12 @@ def run_live_certs(args):
     print_stats()
     _output_file.close()
     _output_file = None
-    log.info("Live cert ingestion complete")
+
+    if backfill_mode:
+        log.info("Backfill complete — collected %d entries from index %d to %d",
+                 stats["parsed"], args.start_index, end_index)
+    else:
+        log.info("Live cert ingestion complete")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -920,8 +952,10 @@ def create_parser():
                       help="Seconds between batches (default: 1.0)")
     live.add_argument("--start-index", type=int,
                       help="Starting CT log index (default: current tree size - batch_size)")
+    live.add_argument("--end-index", type=int,
+                      help="Ending CT log index for backfill mode (optional, enables bounded collection)")
     live.add_argument("--duration", type=int, default=900,
-                      help="Seconds per cert collection batch (default: 900 or 15 minutes)")
+                      help="Seconds per cert collection batch (default: 900 or 15 minutes, ignored in backfill mode)")
 
     # ── live-labels ────────────────────────────────────────────────────────────────
     labels = subparsers.add_parser(
