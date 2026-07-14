@@ -57,3 +57,6 @@ backup_*.tar.gz
 venv/
 env/
 .venv/
+
+docs/
+tranco_top1m.csv
